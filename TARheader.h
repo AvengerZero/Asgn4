@@ -1,5 +1,5 @@
 #ifdef TARheader
-#define
+#define TARheader
 
 struct tapeArchive{
     char name[100];
@@ -9,7 +9,7 @@ struct tapeArchive{
     char size[12];
     char mtime[12];
     char chksum[8];
-    char typeflag[1];
+    char typeflag;
     char linkname[100];
     char magic[6] = "ustar\0";
     char version[2] = "00";
@@ -19,5 +19,7 @@ struct tapeArchive{
     char devminor[8];
     char prefix[155];
 }tapeArchive;
+
+
 
 #endif
