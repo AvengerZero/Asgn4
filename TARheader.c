@@ -22,20 +22,52 @@ int power(int base, int exponent){
 /*input a Character backwards*/
 void intToChar(int data, char *dest){
     if(data){
-	intToChar(data/8, dest --);
-	dest = (data % 8) + 48;
+	intToChar((data - (data % 8))/8, dest - 1);
+	*dest = (data % 8) + 48;
     }
 }
 
 void fillTapeArchive(int fd, char* path)
 {
     int i;
+    
+    /*name and prefix*/
+    if(strlen(path) < 101){
+	for(i = 100 - strlen(path); i < 100; i++){
+	    tape->name[i] = path[i - (100 - strlen(path))];
+	}
+    }else{
+	int slashSpot = 0;
+	for(i = 99; i > 0; i--){
+	    if(path[i] == '/'){
+		slashSpot = i;
+		i = 0;
+	    }
+	}
+	if(slashSpot){
+	    for(i = slashSpot; i > 0; i--){
+		tape->name[100 - i] = path[slashSpot - i];
+	    }
+	    
+	    for(i = 155; i > 0; i--){
+		if(path[slashSpot + (155 - i) + 1]){
+		    tape->prefix[155 - i] = path[slashSpot + (155 - i) + 1];
+		}else{
+		    i = 0;
+		}
+	    }
+	}else{
+	    perror("NAME TOO LONG!");
+	}
+    }
+
+    
     struct stat *data = (struct stat *) malloc(sizeof(struct stat));
-    stat(path, data);
     struct tapeArchive *tape = (struct tapeArchive *) malloc(sizeof(struct tapeArchive));
+
     /*fill typeflag*/
     if(S_ISDIR(data->st_mode)){
-	/*Director*/
+	/*Directory*/
 	tape->typeflag = 53;
     }else if(S_ISLNK(data->st_mode)){
 	/*Symbolic Link*/
@@ -75,10 +107,18 @@ void fillTapeArchive(int fd, char* path)
 
     /*UName*/
 
-    /*Devmajor*/
-    printf("%s\n", tape->devmajor);
-    intToChar(major(data->st_dev), tape->devmajor + 8);
-    printf("%s\n", tape->devmajor + 6);
+    /*Devmajor & Devminor*/
+    if(major(data->st_dev)){
+	intToChar(major(data->st_dev), tape->devmajor + 7);
+    }else{
+	*(tape->devmajor + 7) = 48;
+    }
+    if(minor(data->st_dev)){
+	intToChar(minor(data->st_dev), tape->devminor + 7);
+    }else{
+	*(tape->devminor + 7) = 48;
+    }
+    printArchiveToFile(fd, tape);
     
 }
 
@@ -195,12 +235,34 @@ struct tapeArchive *createArchiveFromFile(int fd){
 }
 
 void printArchiveToFile(int fd, struct tapeArchive *tape){
-    write(fd, tape, 500);
-    write(fd, "\0\0\0\0\0\0\0\0\0\0\0\0\0\\0\0\0\0\0\0\0\0\0\0\0", 12);
+    write(fd, tape->name, 100 * sizeof(char));
+    write(fd, tape->mode, 8 * sizeof(char));
+    (tape->uidInt) ? write(fd, tape->uidInt, sizeof(uint64_t)):
+	write(fd, tape->uid, 8 * sizeof(char));
+    (tape->gidInt) ? write(fd, tape->gidInt, sizeof(uint64_t)):
+	write(fd, tape->gid, 8 * sizeof(char));
+    if(tape->maskSize){
+	write(fd, tape->maskSize, sizeof(uint32_t));
+	write(fd, tape->sizeInt, sizeof(uint64_t));
+    }else{
+	write(fd, tape->size, 12 * sizeof(char));
+    }
+    write(fd, tape->mtime, 12* sizeof(char));
+    write(fd, tape->chksum, 8 * sizeof(char));
+    write(fd, tape->typeflag, sizeof(char));
+    write(fd, tape->linkname, 100 * sizeof(char));
+    write(fd, tape->magic, 6 * sizeof(char));
+    write(fd, tape->version, 2 * sizeof(char));
+    write(fd, tape->uname, 32 * sizeof(char));
+    write(fd, tape->gname, 32 * sizeof(char));
+    write(fd, tape->devmajor, 8 * sizeof(char));
+    write(fd, tape->devminor, 8 * sizeof(char));
+    write(fd, tape->prefix, 155 * sizeof(char));
+    write(fd, "\0\0\0\0\0\0\0\0\0\0\0\0", 12 * sizeof(char));
 }
 
 int main(int argv, char *argc[]){
     char *pathname = argc[1];
-    fillTapeArchive(1, pathname);
+    fillTapeArchive(open(argc[2], O_WRONLY | O_TRUNC | O_CREAT, 0644), pathname);
     return 1;
 }

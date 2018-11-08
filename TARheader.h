@@ -19,8 +19,8 @@ typedef struct tapeArchive{
     char version[2];//
     char uname[32];
     char gname[32];//
-    char devmajor[8];
-    char devminor[8];
+    char devmajor[8];//
+    char devminor[8];//
     char prefix[155];
 }tapeArchive;
 
