@@ -116,4 +116,6 @@ void printv(TapeArchive *tar){
     //translate time int into time format
     //in printing, adds spaces (formatting)
 }
-//timing of errors for path, for header
+//timing of errors for header: listing, extracting, after header
+        //todo: permission, verify,pseudo for extracting 
+        //header->location, name, and stat stuff. then copy paste innards according to size, repeat
