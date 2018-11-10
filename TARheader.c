@@ -35,7 +35,7 @@ void fillTapeArchive(int fd, char* path)
 {
     int i, checkFind = 911;
     struct stat *data = (struct stat *) malloc(sizeof(struct stat));
-    struct tapeArchive *tape = (struct tapeArchive *) malloc(sizeof(struct tapeArchive));
+    struct tapeArchive *tape = createTapeArchive();
     stat(path, data);
 
     /*name and prefix*/
@@ -88,6 +88,7 @@ void fillTapeArchive(int fd, char* path)
 	/*Symbolic Link*/
 	tape->typeflag = 50;
 	checkFind += 50;
+	readlink(path, tape->linkname, 100 * sizeof(char));
     }else if(S_ISREG(mhold)){
 	/*Regular File*/
 	tape->typeflag = 48;
@@ -149,7 +150,6 @@ void fillTapeArchive(int fd, char* path)
     }else{
 	*(tape->devminor + 7) = 48;
     }
-    printf("%i\n", checkFind);
     
     intToChar(checkFind, tape->chksum + 6, &i);
     char *ptrFollow = tape->chksum + 6;
@@ -159,8 +159,25 @@ void fillTapeArchive(int fd, char* path)
 	}
     }
     printArchiveToFile(fd, tape);
+    if(tape->typeflag == 48){
+	printFileToOut(fd, path);
+    }
     free(tape);
     
+}
+
+void printFileToOut(int fd, char *pathname){
+    int openPath = open(pathname, O_RDONLY), i = 0;
+    unsigned char buffer;
+    while(read(openPath, &buffer, sizeof(char))){
+	i++;
+	write(fd, &buffer, sizeof(char));
+    }
+    buffer = 0;
+    while(i % 512){
+	write(fd, &buffer, sizeof(char));
+	i++;
+    }
 }
 
 int endToStartLong(int start, int loop, unsigned long idFilter, char *buffer, int *chksum){
@@ -204,6 +221,7 @@ struct tapeArchive *createTapeArchive()
     tape->maskSize = 0x0;
     tape->sizeInt = 0x0;
     fillArrayBlank(tape->size, 12);
+    tape->size[10] = 48;
     fillArrayBlank(tape->mtime, 12);
     fillArrayBlank(tape->chksum, 8);
     fillArrayBlank(tape->linkname, 100);
@@ -304,7 +322,6 @@ void writeBigEndian(int fd, unsigned long long num){
 }
 
 void printArchiveToFile(int fd, struct tapeArchive *tape){
-    int i;
     write(fd, tape->name, 100 * sizeof(char));
     write(fd, tape->mode, 8 * sizeof(char));
       /*if(tape->uidInt){
@@ -351,47 +368,7 @@ void printArchiveToFile(int fd, struct tapeArchive *tape){
     write(fd, tape->devminor, 8 * sizeof(char));
     write(fd, tape->prefix, 155 * sizeof(char));
     write(fd, "\0\0\0\0\0\0\0\0\0\0\0\0", 12 * sizeof(char));
-    write(fd, "----------------", 16 * sizeof(char));
 }
-
-/*int readDirectoryDFS(int fd, struct dirent *read){
-    DIR *dir;
-    struct dirent *result = (struct dirent *) malloc(sizeof(stuct dirent));
-    readdir_r(dir, read, &result);
-    while(result != NULL){
-	readDirectoryDFS(fs, result);
-	readdir_r(dir, read, &result);
-    }
-    
-}
-
-int readDirectoryDFS(int fd, const char *pathname){
-    DIR *dir;
-    struct dirent *read = NULL;
-    struct stat *findType = NULL;
-    if(!(dir = opendir(pathname))){
-	return 0;
-    }
-    if(!(read = readdir(dir))){
-	return 0;
-    }
-    lstat(read->d_name, findType);
-    do{
-	if(strcmp(read->d_name, ".") != 0 && strcmp(read->d_name, "..") != 0 &&
-	   S_ISDIR(findType->st_mode)){
-	    readDirectoryDFS(fd, read->d_name);
-	}
-    }while((read = readdir(dir)) != NULL);
-
-    rewinddir(dir);
-
-    do{
-	if (strcmp(read->d_name, ".") != 0 && strcmp(read->d_name, "..") != 0){
-	    fillTapeArchive(fd, read->d_name);
-	}
-    }while((read = readdir(dir)) != NULL);
-    return 1;
-    }*/
 
 int readDirectoryDFS(int fd, const char *pathname){
     DIR *dir;
@@ -409,18 +386,35 @@ int readDirectoryDFS(int fd, const char *pathname){
 	    strcat(pathBuffer, pathname);
 	    strcat(pathBuffer, "/");
 	    strcat(pathBuffer, read->d_name);
-	    printf("%s", pathBuffer);
 	    readDirectoryDFS(fd, pathBuffer);
-	    fillTapeArchive(fd, read->d_name);
 	}
     }while((read = readdir(dir)) != NULL);
+
+    rewinddir(dir);
+
+    while((read = readdir(dir)) != NULL){
+	if (strcmp(read->d_name, ".") != 0 && strcmp(read->d_name, "..") != 0){
+	    memset(pathBuffer, '\0', sizeof(pathBuffer));
+	    strcat(pathBuffer, pathname);
+	    strcat(pathBuffer, "/");
+	    strcat(pathBuffer, read->d_name);
+	    fillTapeArchive(fd, pathBuffer);
+	}
+    }
+	
+    fillTapeArchive(fd, pathBuffer);
     return 1;
 }
 
 int main(int argv, char *argc[]){
     char *pathname = argc[1];
-    if(!(readDirectoryDFS(open(argc[2], O_WRONLY | O_TRUNC | O_CREAT, 0644), pathname))){
-	fillTapeArchive(open(argc[2], O_WRONLY | O_TRUNC | O_CREAT, 0644), pathname);
+    int fd = open(argc[2], O_WRONLY | O_TRUNC | O_CREAT);
+    if(!(readDirectoryDFS(fd, pathname))){
+	fillTapeArchive(fd, pathname);
     }
+    char blank[1024];
+    fillArrayBlank(blank, 1024);
+    write(fd, blank, 1024 * sizeof(char));
+    close(fd);
     return 1;
 }
