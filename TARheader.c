@@ -128,7 +128,6 @@ void fillTapeArchive(int fd, char* path)
     /*MTime*/
     unsigned long timeMask = data->st_mtim.tv_sec;
     endToStartLong(11, 11, timeMask, tape->mtime, &checkFind);
-    checkFind += 11;
 
     /*UName*/
     struct passwd *userName = getpwuid(data->st_uid);
@@ -151,7 +150,8 @@ void fillTapeArchive(int fd, char* path)
 	*(tape->devminor + 7) = 48;
     }
     printf("%i\n", checkFind);
-    intToChar(checkFind, tape->chksum + 6, &checkFind);
+    
+    intToChar(checkFind, tape->chksum + 6, &i);
     char *ptrFollow = tape->chksum + 6;
     for(; ptrFollow >= tape->chksum; ptrFollow--){
 	if(!(*ptrFollow)){
