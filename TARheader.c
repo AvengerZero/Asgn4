@@ -23,44 +23,54 @@ int power(int base, int exponent){
 }
 
 /*input a Character backwards*/
-void intToChar(int data, char *dest){
+void intToChar(int data, char *dest, int *chksum){
     if(data){
-	intToChar((data - (data % 8))/8, dest - 1);
+	intToChar((data - (data % 8))/8, dest - 1, chksum);
 	*dest = (data % 8) + 48;
+	*chksum += (data % 8) + 48;
     }
 }
 
-void fillTapeArchive(int fd, char* path, char *prevPath)
+void fillTapeArchive(int fd, char* path)
 {
-    int i, checkFind = 0;
+    int i, checkFind = 911;
     struct stat *data = (struct stat *) malloc(sizeof(struct stat));
     struct tapeArchive *tape = (struct tapeArchive *) malloc(sizeof(struct tapeArchive));
     stat(path, data);
 
     /*name and prefix*/
-    if(strlen(path) < 100){
-	for(i = 99 - strlen(path); i < 99; i++){
-	    tape->name[i] = path[i - (99 - strlen(path))];
-	    checkFind++;
+    if(strlen(path) < 101){
+	for(i = 0; i < 99; i++){
+	    tape->name[i] = path[i];
+	    checkFind += path[i];
+	    if(path[i] == '\0'){
+		i = 100;
+	    }
+	}
+	if(strlen(path) == 100){
+	    tape->name[99] = path[99];
+	    checkFind += path[99];
 	}
     }else{
 	int slashSpot = 0;
-	for(i = 98; i > 0; i--){
+	for(i = 99; i > 0; i--){
 	    if(path[i] == '/'){
 		slashSpot = i;
 		i = 0;
 	    }
 	}
 	if(slashSpot){
-	    for(i = slashSpot; i > 0; i--){
+	    for(i = 0; i < slashSpot; i++){
 		tape->name[99 - i] = path[slashSpot - i];
-		checkFind++;
+		checkFind += path[i];
 	    }
 
-	    for(i = strlen(&(path[slashSpot + 1])); i >= 0;i--){
-		tape->prefix[154 - (i)] =
-		    path[strlen(path) - i];
-		checkFind++;
+	    for(i = slashSpot + 1; i < 155; i++){
+		tape->prefix[i - slashSpot - 1] = path[i];
+		checkFind += path[i];
+		if(path[i] == '\0'){
+		    i = 155;
+		}
 	    }
 	}else{
 	    perror("NAME TOO LONG!");
@@ -69,135 +79,149 @@ void fillTapeArchive(int fd, char* path, char *prevPath)
 
     
     /*fill typeflag*/
-    checkFind++;
     int mhold = data->st_mode;
     if(S_ISDIR(mhold)){
 	/*Directory*/
 	tape->typeflag = 53;
+	checkFind += 53;
     }else if(S_ISLNK(mhold)){
 	/*Symbolic Link*/
 	tape->typeflag = 50;
+	checkFind += 50;
     }else if(S_ISREG(mhold)){
 	/*Regular File*/
 	tape->typeflag = 48;
+	checkFind += 48;
 	/*Size*/
 	if(data->st_size >> 33){
 	    tape->maskSize = MASK32;
 	    tape->sizeInt = data->st_size;
 	}else{
-	    endToStart(11, 11, data->st_size, tape->size);
-	    checkFind += 11;
+	    endToStart(11, 11, data->st_size, tape->size, &checkFind);
 	}
     }
 
     /*File Permissions*/
     for(i = sizeof(tape->mode) - 2; i >= 0; i--){
 	tape->mode[i] = (mhold & 0x7) + 48;
+	checkFind += (mhold & 0x7) + 48;
 	mhold >>= 3;
-	checkFind++;
     }
 
     /*user ID ? BIG-ENDIAN : char*/
     (data->st_uid >> 21) ? tape->uidInt = (MASK64 | data->st_uid) :
-	endToStart(7, 7, data->st_uid, tape->uid);
+	endToStart(7, 7, data->st_uid, tape->uid, &checkFind);
 
     /*Group ID ? BIG-ENDIAN : char*/
     (data->st_gid >> 21) ? tape->gidInt = (MASK64 | data->st_gid) :
-	endToStart(7, 7, data->st_gid, tape->gid);
+		   endToStart(7, 7, data->st_gid, tape->gid, &checkFind);
 
     /*GName*/
     struct group *hold = getgrgid(data->st_gid);
     if(hold != NULL){
-	for(i = sizeof(tape->gname) - strlen(hold->gr_name) - 1;
-	    i < sizeof(tape->gname); i++){
-	    tape->gname[i] = hold->
-		gr_name[i- (sizeof(tape->gname)- strlen(hold->gr_name) - 1)];
-	    checkFind++;
+	for(i = 0; i < strlen(hold->gr_name); i++){
+	    tape->gname[i] = hold->gr_name[i];
+	    checkFind += hold->gr_name[i];
 	}
     }
     
     /*MTime*/
     unsigned long timeMask = data->st_mtim.tv_sec;
-    endToStartLong(11, 11, timeMask, tape->mtime);
+    endToStartLong(11, 11, timeMask, tape->mtime, &checkFind);
     checkFind += 11;
 
     /*UName*/
     struct passwd *userName = getpwuid(data->st_uid);
     if(userName != NULL){
-	for(i = sizeof(tape->uname) - strlen(userName->pw_name) - 1;
-	    i < sizeof(tape->uname); i++){
-	    tape->uname[i] = userName->
-		pw_name[i- (sizeof(tape->uname)- strlen(userName->pw_name) - 1)];
-	    checkFind++;
+	for(i = 0; i < strlen(userName->pw_name); i++){
+	    tape->uname[i] = userName->pw_name[i];
+	    checkFind += userName->pw_name[i];
 	}
     }
 
     /*Devmajor & Devminor*/
     if(major(data->st_dev)){
-	intToChar(major(data->st_dev), tape->devmajor + 7);
+	intToChar(major(data->st_dev), tape->devmajor + 7, &checkFind);
     }else{
 	*(tape->devmajor + 7) = 48;
     }
     if(minor(data->st_dev)){
-	intToChar(minor(data->st_dev), tape->devminor + 7);
+	intToChar(minor(data->st_dev), tape->devminor + 7, &checkFind);
     }else{
 	*(tape->devminor + 7) = 48;
     }
-
     printf("%i\n", checkFind);
+    intToChar(checkFind, tape->chksum + 6, &checkFind);
+    char *ptrFollow = tape->chksum + 6;
+    for(; ptrFollow >= tape->chksum; ptrFollow--){
+	if(!(*ptrFollow)){
+	    *ptrFollow = 48;
+	}
+    }
     printArchiveToFile(fd, tape);
+    free(tape);
     
 }
 
-int endToStartLong(int start, int loop, unsigned long idFilter, char *buffer){
+int endToStartLong(int start, int loop, unsigned long idFilter, char *buffer, int *chksum){
     int buff = idFilter & 0x7;
     if(buff || loop){
-	*(buffer + start - endToStart(start, loop - 1, idFilter >> 3, buffer))
+	*(buffer + start - endToStartLong(start, loop - 1, idFilter >> 3, buffer, chksum))
 	  = buff + 48;
+	*chksum += buff + 48;
 	return start - loop;
     }else{
 	return start - loop;
     }
 }
 
-int endToStart(int start, int loop, unsigned int idFilter, char *buffer){
+int endToStart(int start, int loop, unsigned int idFilter, char *buffer, int *chksum){
     int buff = idFilter & 0x7;
     if(buff || loop){
-	*(buffer + start - endToStart(start, loop - 1, idFilter >> 3, buffer))
+	*(buffer + start - endToStart(start, loop - 1, idFilter >> 3, buffer, chksum))
 	  = buff + 48;
+	*chksum += buff + 48;
 	return start - loop;
     }else{
 	return start - loop;
     }
 }
 
+void fillArrayBlank(char *array, int size){
+    int i = 0;
+    for(; i < size; i++){ array[i] = '\0'; }
+}
 /*Create a Tape Archive Struct pointer*/
 struct tapeArchive *createTapeArchive()
 {
-    struct tapeArchive tape = {
-	.name = {0},
-	.mode = {0},
-	.uidInt = 0x0,
-	.uid = {0},
-	.gidInt = 0x0,
-	.gid = {0},
-	.maskSize = 0x0,
-	.sizeInt = 0x0,
-	.size = {0},
-	.mtime = {0},
-	.chksum = {0},
-	.typeflag = 0,
-	.linkname = {0},
-	.magic = "ustar",
-	.version[0] = 0,
-	.version[1] = 0,
-	.uname = {0},
-	.gname = {0},
-	.devmajor = {0},
-	.devminor = {0},
-	.prefix = {0}
-    };
-    return &tape;
+    struct tapeArchive *tape = (struct tapeArchive *)malloc (sizeof(struct tapeArchive));
+    fillArrayBlank(tape->name, 100);
+    fillArrayBlank(tape->mode, 8);
+    tape->uidInt = 0x0;
+    fillArrayBlank(tape->uid, 8);
+    tape->gidInt = 0x0;
+    fillArrayBlank(tape->gid, 8);
+    tape->maskSize = 0x0;
+    tape->sizeInt = 0x0;
+    fillArrayBlank(tape->size, 12);
+    fillArrayBlank(tape->mtime, 12);
+    fillArrayBlank(tape->chksum, 8);
+    fillArrayBlank(tape->linkname, 100);
+    tape->typeflag = 0;
+    fillArrayBlank(tape->uname, 32);
+    fillArrayBlank(tape->gname, 32);
+    fillArrayBlank(tape->devmajor, 8);
+    fillArrayBlank(tape->devminor, 8);
+    fillArrayBlank(tape->prefix, 155);
+    tape->magic[0] = 'u';
+    tape->magic[1] = 's';
+    tape->magic[2] = 't';
+    tape->magic[3] = 'a';
+    tape->magic[4] = 'r';
+    tape->magic[5] = 0;
+    tape->version[0] = 48;
+    tape->version[1] = 48;
+    return tape;
 }
 
 /*Create a list of Tape Archive pointers of length [size]*/
@@ -305,19 +329,69 @@ void printArchiveToFile(int fd, struct tapeArchive *tape){
     write(fd, tape->chksum, 8 * sizeof(char));
     write(fd, &(tape->typeflag), sizeof(char));
     write(fd, tape->linkname, 100 * sizeof(char));
-    write(fd, tape->magic, 6 * sizeof(char));
-    write(fd, tape->version, 2 * sizeof(char));
+    char *magic = (char *) malloc(sizeof(char));
+    *magic = 'u';
+    write(fd, magic, sizeof(char));
+    *magic = 's';
+    write(fd, magic, sizeof(char));
+    *magic = 't';
+    write(fd, magic, sizeof(char));
+    *magic = 'a';
+    write(fd, magic, sizeof(char));
+    *magic = 'r';
+    write(fd, magic, sizeof(char));
+    *magic = '\0';
+    write(fd, magic, sizeof(char));
+    *magic = '0';
+    write(fd, magic, sizeof(char));
+    write(fd, magic, sizeof(char));
     write(fd, tape->uname, 32 * sizeof(char));
     write(fd, tape->gname, 32 * sizeof(char));
     write(fd, tape->devmajor, 8 * sizeof(char));
     write(fd, tape->devminor, 8 * sizeof(char));
     write(fd, tape->prefix, 155 * sizeof(char));
     write(fd, "\0\0\0\0\0\0\0\0\0\0\0\0", 12 * sizeof(char));
+    write(fd, "----------------", 16 * sizeof(char));
 }
 
-int readDirectoryDFS(int fd, DIR *dir){
-    ;
+/*int readDirectoryDFS(int fd, struct dirent *read){
+    DIR *dir;
+    struct dirent *result = (struct dirent *) malloc(sizeof(stuct dirent));
+    readdir_r(dir, read, &result);
+    while(result != NULL){
+	readDirectoryDFS(fs, result);
+	readdir_r(dir, read, &result);
+    }
+    
 }
+
+int readDirectoryDFS(int fd, const char *pathname){
+    DIR *dir;
+    struct dirent *read = NULL;
+    struct stat *findType = NULL;
+    if(!(dir = opendir(pathname))){
+	return 0;
+    }
+    if(!(read = readdir(dir))){
+	return 0;
+    }
+    lstat(read->d_name, findType);
+    do{
+	if(strcmp(read->d_name, ".") != 0 && strcmp(read->d_name, "..") != 0 &&
+	   S_ISDIR(findType->st_mode)){
+	    readDirectoryDFS(fd, read->d_name);
+	}
+    }while((read = readdir(dir)) != NULL);
+
+    rewinddir(dir);
+
+    do{
+	if (strcmp(read->d_name, ".") != 0 && strcmp(read->d_name, "..") != 0){
+	    fillTapeArchive(fd, read->d_name);
+	}
+    }while((read = readdir(dir)) != NULL);
+    return 1;
+    }*/
 
 int readDirectoryDFS(int fd, const char *pathname){
     DIR *dir;
@@ -328,15 +402,16 @@ int readDirectoryDFS(int fd, const char *pathname){
     if(!(read = readdir(dir))){
 	return 0;
     }
-    do{
-	if(strcmp(read->d_name, ".") != 0 && strcmp(read->d_name, "..") != 0 &&
-	   !(chdir(read->d_name))){
-	}
-    }while((read = readdir(dir)) != NULL);
-    
+    char pathBuffer[255];
     do{
 	if (strcmp(read->d_name, ".") != 0 && strcmp(read->d_name, "..") != 0){
-	    fillTapeArchive(fd, read->d_name, pathname);
+	    memset(pathBuffer, '\0', sizeof(pathBuffer));
+	    strcat(pathBuffer, pathname);
+	    strcat(pathBuffer, "/");
+	    strcat(pathBuffer, read->d_name);
+	    printf("%s", pathBuffer);
+	    readDirectoryDFS(fd, pathBuffer);
+	    fillTapeArchive(fd, read->d_name);
 	}
     }while((read = readdir(dir)) != NULL);
     return 1;
@@ -344,6 +419,8 @@ int readDirectoryDFS(int fd, const char *pathname){
 
 int main(int argv, char *argc[]){
     char *pathname = argc[1];
-    readDirectoryDFS(open(argc[2], O_WRONLY | O_TRUNC | O_CREAT, 0644), pathname);
+    if(!(readDirectoryDFS(open(argc[2], O_WRONLY | O_TRUNC | O_CREAT, 0644), pathname))){
+	fillTapeArchive(open(argc[2], O_WRONLY | O_TRUNC | O_CREAT, 0644), pathname);
+    }
     return 1;
 }
