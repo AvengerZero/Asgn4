@@ -162,15 +162,15 @@ void printv(TapeArchive *tar){ //rule of thumb: copy data into your own for ease
     struct passwd *pwd;
     //int uid=tar->uid ? strtol into int?
     if ((pwd = getpwuid(uid)) != NULL)
-        printf("%*s ",17, pwd->pw_name);
+        printf("%*s/",8, pwd->pw_name);
     else
-        printf("%*d ", uid); 
+        printf("%*d/",8, uid); 
     struct group *grp;
     //int gid=tar->gid ??
     if ((grp = getgrgid(gid)) != NULL)
-        printf("%*s ", grp->gr_name);
+        printf("%*s ", 8,grp->gr_name);
     else
-        printf("%*d ", gid);
+        printf("%*d ",8, gid);
     
     //translate time int into time format
     time_t time=strtol(tar->mtime,NULL,8);
