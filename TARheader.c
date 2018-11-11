@@ -74,6 +74,7 @@ void fillTapeArchive(int fd, char* path)
 	    }
 	}else{
 	    perror("NAME TOO LONG!");
+	    exit(1);
 	}
     }
 
@@ -90,6 +91,7 @@ void fillTapeArchive(int fd, char* path)
 	    checkFind += '/';
 	}else{
 	    perror("NAME TOO LONG");
+	    exit(1);
 	}
     }else if(S_ISLNK(mhold)){
 	/*Symbolic Link*/
@@ -219,10 +221,12 @@ void printFileToOut(int fd, char *pathname){
     }
 }
 
-int endToStartLong(int start, int loop, unsigned long idFilter, char *buffer, int *chksum){
+int endToStartLong(int start, int loop,
+		   unsigned long idFilter, char *buffer, int *chksum){
     int buff = idFilter & 0x7;
     if(buff || loop){
-	*(buffer + start - endToStartLong(start, loop - 1, idFilter >> 3, buffer, chksum))
+	*(buffer + start -
+	  endToStartLong(start, loop - 1, idFilter >> 3, buffer, chksum))
 	  = buff + 48;
 	*chksum += buff + 48;
 	return start - loop;
@@ -231,10 +235,12 @@ int endToStartLong(int start, int loop, unsigned long idFilter, char *buffer, in
     }
 }
 
-int endToStart(int start, int loop, unsigned int idFilter, char *buffer, int *chksum){
+int endToStart(int start, int loop,
+	       unsigned int idFilter, char *buffer, int *chksum){
     int buff = idFilter & 0x7;
     if(buff || loop){
-	*(buffer + start - endToStart(start, loop - 1, idFilter >> 3, buffer, chksum))
+	*(buffer + start -
+	  endToStart(start, loop - 1, idFilter >> 3, buffer, chksum))
 	  = buff + 48;
 	*chksum += buff + 48;
 	return start - loop;
@@ -250,7 +256,8 @@ void fillArrayBlank(char *array, int size){
 /*Create a Tape Archive Struct pointer*/
 struct tapeArchive *createTapeArchive()
 {
-    struct tapeArchive *tape = (struct tapeArchive *)malloc (sizeof(struct tapeArchive));
+    struct tapeArchive *tape =
+      (struct tapeArchive *)malloc (sizeof(struct tapeArchive));
     fillArrayBlank(tape->name, 100);
     fillArrayBlank(tape->mode, 8);
     tape->uidInt = 0x0;
@@ -284,7 +291,8 @@ struct tapeArchive *createTapeArchive()
 
 /*Create a list of Tape Archive pointers of length [size]*/
 struct tapeArchive **createTapeArchiveList(int size){
-    return (struct tapeArchive **) malloc(sizeof(struct tapeArchive *) * size);
+    return (struct tapeArchive **)
+      malloc(sizeof(struct tapeArchive *) * size);
 }
 
 /*Take a File Directory and return a struct pointer 
@@ -381,16 +389,18 @@ struct tapeArchive *createArchiveFromFile(int fd){
 	read(fd, &buffer, sizeof(char));
 	tape->magic[i] = buffer;
     }
+    /*
     if(strcmp(tape->magic, "ustar")){
 	printf("File Corrupted");
-    }
+    }*/
     for(i = 0; i < 2; i++){
 	read(fd, &buffer, sizeof(char));
 	tape->version[i] = buffer;
     }
+    /*
     if(strcmp(tape->version, "00")){
 	printf("File Corrupted");
-    }
+	}*/
     
     for(i = 0; i < 32; i++){
 	read(fd, &buffer, sizeof(char));
@@ -486,7 +496,8 @@ int readDirectoryDFS(int fd, const char *pathname){
     }
     char pathBuffer[255];
     do{
-	if (strcmp(read->d_name, ".") != 0 && strcmp(read->d_name, "..") != 0){
+	if (strcmp(read->d_name, ".") != 0 &&
+	    strcmp(read->d_name, "..") != 0){
 	    memset(pathBuffer, '\0', sizeof(pathBuffer));
 	    strcat(pathBuffer, pathname);
 	    strcat(pathBuffer, "/");
@@ -501,7 +512,8 @@ int readDirectoryDFS(int fd, const char *pathname){
     rewinddir(dir);
 
     while((read = readdir(dir)) != NULL){
-	if (strcmp(read->d_name, ".") != 0 && strcmp(read->d_name, "..") != 0){
+	if (strcmp(read->d_name, ".") != 0 &&
+	    strcmp(read->d_name, "..") != 0){
 	    memset(pathBuffer, '\0', sizeof(pathBuffer));
 	    strcat(pathBuffer, pathname);
 	    strcat(pathBuffer, "/");
@@ -521,8 +533,9 @@ void printTapeArchive(struct tapeArchive *tape){
 	printf("uid: %s\n", tape->uid);
     (tape->gidInt) ? printf("gid: %llu\n", tape->gidInt) :
 	printf("gid: %s\n", tape->gid);
-    (tape->maskSize) ? printf("size: %u%llu\n", tape->maskSize, tape->sizeInt) :
-	printf("size: %s\n", tape->size);
+    (tape->maskSize) ? printf("size: %u%llu\n",
+			      tape->maskSize, tape->sizeInt) :
+      printf("size: %s\n", tape->size);
     printf("mtime: %s\n", tape->mtime);
     printf("chksum: %s\n", tape->chksum);
     printf("typeflag: %c\n", tape->typeflag);
@@ -536,20 +549,64 @@ void printTapeArchive(struct tapeArchive *tape){
     printf("prefix: %s\n", tape->prefix);
 }
 
-int main(int argv, char *argc[]){
-    /*char *pathname = argc[1];
+int ifStringBlank(char *check, int size){
+    int i;
+    for(i = 0; i < size; i++){
+	if(check[i]){
+	    return 1;
+	}
+    }
+    return 0;
+}
+
+int sizeTranslation(char *intString){
+  int total = 0, i = 0;
+  for(; i < sizeof(intString); i++){
+	total *= 8;
+	total += (*intString - 48);
+    }
+    return total;
+}
+
+/*takes a tape archive and check if it is blank, return 0 if not*/
+int ifBlankBlock(tapeArchive *tape){
+    if(tape->uidInt || tape->gidInt || tape->maskSize ||
+       ifStringBlank(tape->name, 100) ||
+       ifStringBlank(tape->mode, 8) ||
+       ifStringBlank(tape->uid, 8) ||
+       ifStringBlank(tape->gid, 8) ||
+       ifStringBlank(tape->size, 12) ||
+       ifStringBlank(tape->mtime, 12) ||
+       ifStringBlank(tape->chksum, 8) ||
+       tape->typeflag ||
+       ifStringBlank(tape->linkname, 100) ||
+       ifStringBlank(tape->magic, 6) ||
+       ifStringBlank(tape->version, 2) ||
+       ifStringBlank(tape->uname, 32) ||
+       ifStringBlank(tape->gname, 32) ||
+       ifStringBlank(tape->devmajor, 8) ||
+       ifStringBlank(tape->devminor, 8) ||
+       ifStringBlank(tape->prefix, 155)){
+	return 1;
+    }
+    return 0;
+}
+
+
+/*int main(int argv, char *argc[]){
+    char *pathname = argc[1];
     int fd = open(argc[2], O_RDWR | O_TRUNC | O_CREAT, 0644);
     fillTapeArchive(fd, pathname);
     readDirectoryDFS(fd, pathname);
     char blank[1024];
     fillArrayBlank(blank, 1024);
     write(fd, blank, 1024 * sizeof(char));
-    close(fd);*/
+    close(fd);
 
-    /*Extract*/
+    Extract
     int fd = open(argc[1], O_RDONLY);
     struct tapeArchive *tape = createArchiveFromFile(fd);
     printTapeArchive(tape);
     close(fd);
     return 1;
-}
+}*/
