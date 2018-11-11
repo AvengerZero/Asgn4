@@ -552,7 +552,7 @@ void printTapeArchive(struct tapeArchive *tape){
 int ifStringBlank(char *check, int size){
     int i;
     for(i = 0; i < size; i++){
-	if(check[i]){
+	if(check[i] != '\0'){
 	    return 1;
 	}
     }
