@@ -33,7 +33,7 @@ void intToChar(int data, char *dest, int *chksum){
 
 void fillTapeArchive(int fd, char* path)
 {
-    int i, checkFind = 911;
+    int i, checkFind = 8*32 + 'u' + 's' + 't' + 'a' + 'r' + '0' + '0';
     struct stat *data = (struct stat *) malloc(sizeof(struct stat));
     struct tapeArchive *tape = createTapeArchive();
     stat(path, data);
@@ -84,6 +84,13 @@ void fillTapeArchive(int fd, char* path)
 	/*Directory*/
 	tape->typeflag = 53;
 	checkFind += 53;
+	for(i = 99; tape->name[i] == '\0'; i--);
+	if(i != 99){
+	    tape->name[i+1] = '/';
+	    checkFind += '/';
+	}else{
+	    perror("NAME TOO LONG");
+	}
     }else if(S_ISLNK(mhold)){
 	/*Symbolic Link*/
 	tape->typeflag = 50;
@@ -103,9 +110,14 @@ void fillTapeArchive(int fd, char* path)
     }
 
     /*File Permissions*/
-    for(i = sizeof(tape->mode) - 2; i >= 0; i--){
+    for(i = sizeof(tape->mode) - 2; i >= 4; i--){
 	tape->mode[i] = (mhold & 0x7) + 48;
 	checkFind += (mhold & 0x7) + 48;
+	mhold >>= 3;
+    }
+    for(; i >= 0; i--){
+	tape->mode[i] = (mhold & 0x0) + 48;
+	checkFind += (mhold & 0x0) + 48;
 	mhold >>= 3;
     }
 
@@ -150,6 +162,17 @@ void fillTapeArchive(int fd, char* path)
     }else{
 	*(tape->devminor + 7) = 48;
     }
+
+    if(tape->uidInt){
+	chkLong(tape->uidInt, &checkFind);
+    }
+    if(tape->gidInt){
+	chkLong(tape->gidInt, &checkFind);
+    }
+    if(tape->maskSize){
+	chkLong1(tape->maskSize, &checkFind);
+	chkLong(tape->sizeInt, &checkFind);
+    }
     
     intToChar(checkFind, tape->chksum + 6, &i);
     char *ptrFollow = tape->chksum + 6;
@@ -164,6 +187,22 @@ void fillTapeArchive(int fd, char* path)
     }
     free(tape);
     
+}
+
+void chkLong1(uint32_t add, int *chksum){
+    int i = 0;
+    for(; i < 8; i++){
+	*chksum += add & 0xff;
+	add >>= 3;
+    }
+}
+
+void chkLong(unsigned long long add, int *chksum){
+    int i = 0;
+    for(; i < 8; i++){
+	*chksum += add & 0xff;
+	add >>= 8;
+    }
 }
 
 void printFileToOut(int fd, char *pathname){
@@ -386,7 +425,10 @@ int readDirectoryDFS(int fd, const char *pathname){
 	    strcat(pathBuffer, pathname);
 	    strcat(pathBuffer, "/");
 	    strcat(pathBuffer, read->d_name);
-	    readDirectoryDFS(fd, pathBuffer);
+	    if(opendir(pathname) != NULL){
+		fillTapeArchive(fd, pathBuffer);
+		readDirectoryDFS(fd, pathBuffer);
+	    }
 	}
     }while((read = readdir(dir)) != NULL);
 
@@ -398,20 +440,19 @@ int readDirectoryDFS(int fd, const char *pathname){
 	    strcat(pathBuffer, pathname);
 	    strcat(pathBuffer, "/");
 	    strcat(pathBuffer, read->d_name);
-	    fillTapeArchive(fd, pathBuffer);
+	    if(opendir(pathname) == NULL){
+		fillTapeArchive(fd, pathBuffer);
+	    }
 	}
     }
-	
-    fillTapeArchive(fd, pathBuffer);
     return 1;
 }
 
 int main(int argv, char *argc[]){
     char *pathname = argc[1];
     int fd = open(argc[2], O_WRONLY | O_TRUNC | O_CREAT);
-    if(!(readDirectoryDFS(fd, pathname))){
-	fillTapeArchive(fd, pathname);
-    }
+    fillTapeArchive(fd, pathname);
+    readDirectoryDFS(fd, pathname);
     char blank[1024];
     fillArrayBlank(blank, 1024);
     write(fd, blank, 1024 * sizeof(char));

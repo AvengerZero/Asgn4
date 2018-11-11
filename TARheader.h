@@ -37,5 +37,7 @@ int endToStartLong(int start, int loop, unsigned long idFilter, char *buffer, in
 int readDirectoryDFS(int fd, const char *pathname);
 void fillArrayBlank(char *array, int size);
 void printFileToOut(int fd, char *pathname);
+void chkLong1(uint32_t add, int *chksum);
+void chkLong(unsigned long long add, int *chksum);
 
 #endif
