@@ -36,9 +36,9 @@ int main(int argc, char *argv[]){
     }
     tarfile=argv[2];
     if (argc>=4){path=argv[3]; numpath=argc-3;} //more than 1 argument (when to check search 256+?)
-    if (c==1){(creation(tarfile,path,numpath,v));} //NOTE: NEW PARAMETERS FOR FUNCTION
-    if (t==1){printf(listing());}
-    if (x==1){printf(extraction());}
+    if (c==1){(creation(tarfile,path,numpath,v,S));} //NOTE: NEW PARAMETERS FOR FUNCTION
+    if (t==1){printf(listing(tarfile,path,numpath,v,S));}
+    if (x==1){printf(extraction(tarfile,path,numpath,S));}
     return 0;
 }
 //note possible errors: fail to read file, fail to execute certain steps, including malloc
@@ -65,46 +65,59 @@ int listing(){ //NOTE: CORRUPT HEADER=ABORT
     //INVALID CHECKSUM, MAGIC NUM, VERSION
     //how to loop the int fd process to do all of this until numpath=0(what if it's already 0?): flag int done=0
     char buf[512]=0;
-    int doneflag=0;
+    int done=0; //flag
     //create new empty TA struct tapeArchive *tar=createnewTA();
     while (numpath!=0|done==0){
         
-    int fd=open(tarfile,O_RDONLY);
-    if (fd<0){ perror("open");return 1;}
+        int fd=open(tarfile,O_RDONLY);
+        if (fd<0){ perror("open");return 1;}
     
         while (int a=read(fd,&buf,512)){
             if (a==-1){perror("read");return 1;}
             //put things inside [512] string into empty TArchive tar=fillTA(buf); //WRONG, NEED ARJUN
             if (verifyTA){return 1;}
             long int b=strtol(tar->size,NULL,8);
-        if (path!=NULL){
+            if (path!=NULL){
             //compare path to name: use tar
-            if (strlen(path)>256){
-                perror("pathlen");return 1;
-            }
-            char *pfix=tar->prefix;
-            char *nme=tar->name;
-            strcat(pfix,nme); //final string in pfix
-            char* yes=strstr(pfix,path); //find substring in string
-            if (yes){ //do the traversal
+                if (strlen(path)>256){
+                    perror("pathlen");return 1;
+                }
+                char *pfix=tar->prefix;
+                char *nme=tar->name;
+                strcat(pfix,nme); //final string in pfix
+                char* yes=strstr(pfix,path); //find substring in string
+                if (yes){ //do the traversal
                 //print info
-                if (v==1){printv(tar);}
-                else{ printf("%s/n",tar->name);}
+                    if (v==1){
+                        printv(tar);
+                    }
+                    else{ 
+                        printf("%s/n",tar->name);
+                    }
+                }
+                int c=b%512;
+                if (c>0){ c=b/512+1;}
+                else{ c=b/512;}
+                read(fd,NULL,c*512); //skip the contents c worth of blocks
             }
-            int c=b%512;
-            if (c>0){ c=b/512+1;}
-            else{ c=b/512;}
-            read(fd,NULL,c*512); //skip the contents c worth of blocks
-        }
-        else {//if no path,print everything
+            else {//if no path,print everything
         //checks to see if 
-            if (v==1){printv(tar);}
-            else{ printf("%s/n",tar->name);
-            read(fd,NULL,b); //skip the contents x-steps WRONG
+                if (v==1){
+                    printv(tar);
+                }
+                else{ 
+                    printf("%s/n",tar->name);
+                }
+                int c=b%512;
+                if (c>0){ c=b/512+1;}
+                else{ c=b/512;}
+                read(fd,NULL,c*512); //skip the contents c worth of blocks        }
+                }
         }
-    }
-    }
-    printf("%s,%d",tarfile,v);
+        numpath--;
+        done++;
+        path+=(strlen(path)+1);
+        close(fd);
     return 0;
 }
 int extraction(){ //implement a strlen to keep checking the file's remaining is <512
@@ -202,7 +215,7 @@ void printv(struct tapeArchive *tar){ //rule of thumb: copy data into your own f
     if(tar->prefix[0] != NULL){
         printf("%s/", tar->prefix);
     }
-    printf("%s/n",tar->name); //consider if it's not NULL-terminated? (sectioned at 100?)
+    printf("%s/n",taar->name); //consider if it's not NULL-terminated? (sectioned at 100?)
 }
 
 char* formatdate(char* str, time_t val)
