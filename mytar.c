@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <grp.h>
 
 //#define _BSD_SOURCE
 //static variable declaration
@@ -44,7 +45,7 @@ int main(int argc, char *argv[]){
 //note possible errors: fail to read file, fail to execute certain steps, including malloc
 //Lacking in free command
 //NOTE: IF PATH MORE THAN 256, ERROR
-int creation(){
+int creation(){ //leave it to Arjun
     int fd=open(tarfile,O_CREAT|O_RDWR|O_TRUNC,770); //create new with perms
     if (fd<0){ perror("fd-open");return 1;}
     tapeArchive *tar=createArchiveFromFile(fd); 
@@ -72,6 +73,7 @@ int listing(){ //NOTE: CORRUPT HEADER=ABORT
         if (a==-1){perror("read");return 1;}
         //put things inside [512] string into empty TArchive (handle uid?)
         tar=fillTA(buf);
+        if (verifyTA){return 1;}
         long int b=strtol(tar->size,NULL,8);
         if (path!=NULL){
             //compare path to name: use tar
@@ -102,20 +104,82 @@ int listing(){ //NOTE: CORRUPT HEADER=ABORT
     printf("%s,%d",tarfile,v);
     return 0;
 }
-int extraction(){
+int extraction(){ //have an int tracker to be below 512
     printf("%s,%s",tarfile,path);
     return 0;
 }
-int tarVerify(tarfile){
-    
+int tarVerify(TapeArchive *tar){
+    if (/*check to see if checksum is correct-Arjun's, return 1 if false*/){
+        perror("bad header"); 
+        return 1;
+    }
+    if (S==1){
+        for(int i=0;i<9;i++{ //magic number/version
+            char u[8]="ustar/000";
+            if (*(tar->magic+i)!=u[i]){     
+                perror("bad header"); 
+                return 1;
+            }
+        }
+        
+    else{
+        if (strcmp(tar->magic,"ustar")){
+            perror("bad header"); 
+            return 1;
+        }
+    }
+    return 0;
 }
-void printv(TapeArchive *tar){
-    
+void printv(TapeArchive *tar){ //rule of thumb: copy data into your own for ease of manipulation
     //uses mode (left padded with 4 ASCII 0000, 4 ASCII numbers, 0(sticky)XXX (user-group.other)) and \0
-    //translate uid and gid into namespace
+    char octal[4]=tar->mode-4;
+    char perms[10]=0;
+    switch (*tar->typeflag){
+        case '5':
+            perms[0]='d';
+        case '2':
+            perms[0]='l';
+        default:
+            perms[0]='-';
+    }
+    for (int i=0;i<3;i++){ //per char 
+        int x=atoi(octal[i]);
+        if ((x-4)>=0){//read
+            x-=4;
+            persm[i*3+1]='r';
+        }
+        else {persm[i*3+1]='-';}
+        if ((x-2)>=0){//write
+            x-=2;
+            persm[i*3+1]='w';
+        }
+        else {persm[i*3+1]='-';}
+        if ((x-1)>=0){//execute
+            x-=1;
+            persm[i*3+1]='x';
+        }
+        else {persm[i*3+1]='-';}
+    }
+    
+    //translate uid and gid into namespace (if failed, print numbers)
+    struct passwd *pwd;
+    //int uid=tar->uid ? strtol into int?
+    if ((pwd = getpwuid(uid)) != NULL)
+        printf(" %-8.8s", pwd->pw_name);
+    else
+        printf(" %-8d", uid);
+    struct group *grp;
+    //int gid=tar->gid ??
+    if ((grp = getgrgid(gid)) != NULL)
+        printf(" %-8.8s", grp->gr_name);
+    else
+        printf(" %-8d", gid);
+    
     //translate time int into time format
+    
     //in printing, adds spaces (formatting)
+    printf("",);
 }
-//timing of errors for header: listing, extracting, after header
-        //todo: permission, verify,pseudo for extracting 
+//timing of errors for header: listing, extracting, after getting header
+        //todo: permission, verify (deals with strict),pseudo for extracting 
         //header->location, name, and stat stuff. then copy paste innards according to size, repeat
