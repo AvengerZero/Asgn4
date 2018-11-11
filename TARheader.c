@@ -278,6 +278,7 @@ struct tapeArchive *createTapeArchive()
     tape->magic[5] = 0;
     tape->version[0] = 48;
     tape->version[1] = 48;
+    tape->version[2] = '\0';
     return tape;
 }
 
@@ -291,6 +292,7 @@ struct tapeArchive **createTapeArchiveList(int size){
 struct tapeArchive *createArchiveFromFile(int fd){
     int i;
     char buffer;
+    unsigned long long hold;
     struct tapeArchive *tape = createTapeArchive();
     for(i = 0; i < 100; i++){
 	read(fd, &buffer, sizeof(char));
@@ -300,19 +302,67 @@ struct tapeArchive *createArchiveFromFile(int fd){
 	read(fd, &buffer, sizeof(char));
 	tape->mode[i] = buffer;
     }
-    for(i = 0; i < 8; i++){
-	read(fd, &buffer, sizeof(char));
-	tape->uid[i] = buffer;
+    
+    read(fd, &buffer, sizeof(char));
+    if(buffer & 0x80){
+	hold = buffer-0x80;
+	for(i = 1; i < 8; i++){
+	    hold *= 256;
+	    read(fd, &buffer, sizeof(char));
+	    hold += buffer;
+	}
+	tape->uidInt= hold;
+    }else{
+	tape->uid[0] = buffer;
+	for(i = 1; i < 8; i++){
+	    read(fd, &buffer, sizeof(char));
+	    tape->uid[i] = buffer;
+	}
     }
-    for(i = 0; i < 8; i++){
+    
+    
+    read(fd, &buffer, sizeof(char));
+    if(buffer & 0x80){
+	hold = buffer-0x80;
+	for(i = 1; i < 8; i++){
+	    hold *= 256;
+	    read(fd, &buffer, sizeof(char));
+	    hold += buffer;
+	}
+	tape->gidInt = hold;
+    }else{
+	tape->gid[0] = buffer;
+	for(i = 1; i < 8; i++){
+	    read(fd, &buffer, sizeof(char));
+	    tape->gid[i] = buffer;
+	}
+    }
+    
+    read(fd, &buffer, sizeof(char));
+    if(buffer & 0x80){
+	uint32_t need = buffer-0x80;
+	for(i = 1; i < 4; i++){
+	    need *= 256;
+	    read(fd, &buffer, sizeof(char));
+	    need += buffer;
+	}
+	tape->maskSize = need;
 	read(fd, &buffer, sizeof(char));
-	tape->gid[i] = buffer;
+	hold = buffer-0x80;
+	for(i = 1; i < 8; i++){
+	    hold *= 256;
+	    read(fd, &buffer, sizeof(char));
+	    hold += buffer;
+	}
+	tape->sizeInt = hold;
+    }else{
+	tape->size[0] = buffer;
+	for(i = 1; i < 12; i++){
+	    read(fd, &buffer, sizeof(char));
+	    tape->size[i] = buffer;
+	}
     }
     for(i = 0; i < 12; i++){
-	read(fd, &buffer, sizeof(char));
-	tape->size[i] = buffer;
-    }
-    for(i = 0; i < 8; i++){
 	read(fd, &buffer, sizeof(char));
 	tape->mtime[i] = buffer;
     }
@@ -326,6 +376,22 @@ struct tapeArchive *createArchiveFromFile(int fd){
 	read(fd, &buffer, sizeof(char));
 	tape->linkname[i] = buffer;
     }
+    
+    for(i = 0; i < 6; i++){
+	read(fd, &buffer, sizeof(char));
+	tape->magic[i] = buffer;
+    }
+    if(strcmp(tape->magic, "ustar")){
+	printf("File Corrupted");
+    }
+    for(i = 0; i < 2; i++){
+	read(fd, &buffer, sizeof(char));
+	tape->version[i] = buffer;
+    }
+    if(strcmp(tape->version, "00")){
+	printf("File Corrupted");
+    }
+    
     for(i = 0; i < 32; i++){
 	read(fd, &buffer, sizeof(char));
 	tape->uname[i] = buffer;
@@ -448,14 +514,42 @@ int readDirectoryDFS(int fd, const char *pathname){
     return 1;
 }
 
+void printTapeArchive(struct tapeArchive *tape){
+    printf("name: %s\n", tape->name);
+    printf("mode: %s\n", tape->mode);
+    (tape->uidInt) ? printf("uid: %llu\n", tape->uidInt) :
+	printf("uid: %s\n", tape->uid);
+    (tape->gidInt) ? printf("gid: %llu\n", tape->gidInt) :
+	printf("gid: %s\n", tape->gid);
+    (tape->maskSize) ? printf("size: %u%llu\n", tape->maskSize, tape->sizeInt) :
+	printf("size: %s\n", tape->size);
+    printf("mtime: %s\n", tape->mtime);
+    printf("chksum: %s\n", tape->chksum);
+    printf("typeflag: %c\n", tape->typeflag);
+    printf("linkname: %s\n", tape->linkname);
+    printf("magic: %s\n", tape->magic);
+    printf("version: %s\n", tape->version);
+    printf("uname: %s\n", tape->uname);
+    printf("gname: %s\n", tape->gname);
+    printf("devmajor: %s\n", tape->devmajor);
+    printf("devminor: %s\n", tape->devminor);
+    printf("prefix: %s\n", tape->prefix);
+}
+
 int main(int argv, char *argc[]){
-    char *pathname = argc[1];
-    int fd = open(argc[2], O_WRONLY | O_TRUNC | O_CREAT);
+    /*char *pathname = argc[1];
+    int fd = open(argc[2], O_RDWR | O_TRUNC | O_CREAT, 0644);
     fillTapeArchive(fd, pathname);
     readDirectoryDFS(fd, pathname);
     char blank[1024];
     fillArrayBlank(blank, 1024);
     write(fd, blank, 1024 * sizeof(char));
+    close(fd);*/
+
+    /*Extract*/
+    int fd = open(argc[1], O_RDONLY);
+    struct tapeArchive *tape = createArchiveFromFile(fd);
+    printTapeArchive(tape);
     close(fd);
     return 1;
 }

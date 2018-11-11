@@ -16,7 +16,7 @@ typedef struct tapeArchive{
     char typeflag;//
     char linkname[100];
     char magic[6];//
-    char version[2];//
+    char version[3];//
     char uname[32];//
     char gname[32];//
     char devmajor[8];//
@@ -39,5 +39,6 @@ void fillArrayBlank(char *array, int size);
 void printFileToOut(int fd, char *pathname);
 void chkLong1(uint32_t add, int *chksum);
 void chkLong(unsigned long long add, int *chksum);
+void printTapeArchive(struct tapeArchive *tape);
 
 #endif
