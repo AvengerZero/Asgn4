@@ -219,6 +219,7 @@ void printFileToOut(int fd, char *pathname){
 	write(fd, &buffer, sizeof(char));
 	i++;
     }
+    close(openPath);
 }
 
 int endToStartLong(int start, int loop,
@@ -424,7 +425,7 @@ struct tapeArchive *createArchiveFromFile(int fd){
     }
     for(i = 0; i < 12; i++){
 	read(fd, &buffer, sizeof(char));
-	if(buffer){perror("Data corrupted!");};
+	if(buffer != '\0'){perror("Data corrupted!");};
     }
     return tape;
 }
@@ -559,8 +560,9 @@ int ifStringBlank(char *check, int size){
     return 0;
 }
 
-int sizeTranslation(char *intString){
-  int total = 0, i = 0;
+unsigned long sizeTranslation(char *intString){
+  unsigned long total = 0;
+  int i = 0;
   for(; i < sizeof(intString); i++){
 	total *= 8;
 	total += (*intString - 48);
@@ -570,7 +572,7 @@ int sizeTranslation(char *intString){
 
 /*takes a tape archive and check if it is blank, return 0 if not*/
 int ifBlankBlock(tapeArchive *tape){
-    if(tape->uidInt || tape->gidInt || tape->maskSize ||
+    return (tape->uidInt || tape->gidInt || tape->maskSize ||
        ifStringBlank(tape->name, 100) ||
        ifStringBlank(tape->mode, 8) ||
        ifStringBlank(tape->uid, 8) ||
@@ -578,7 +580,7 @@ int ifBlankBlock(tapeArchive *tape){
        ifStringBlank(tape->size, 12) ||
        ifStringBlank(tape->mtime, 12) ||
        ifStringBlank(tape->chksum, 8) ||
-       tape->typeflag ||
+       (tape->typeflag != '\0' && tape->typeflag != 48) ||
        ifStringBlank(tape->linkname, 100) ||
        ifStringBlank(tape->magic, 6) ||
        ifStringBlank(tape->version, 2) ||
@@ -586,10 +588,7 @@ int ifBlankBlock(tapeArchive *tape){
        ifStringBlank(tape->gname, 32) ||
        ifStringBlank(tape->devmajor, 8) ||
        ifStringBlank(tape->devminor, 8) ||
-       ifStringBlank(tape->prefix, 155)){
-	return 1;
-    }
-    return 0;
+       ifStringBlank(tape->prefix, 155));
 }
 
 

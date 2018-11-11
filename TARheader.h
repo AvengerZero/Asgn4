@@ -44,6 +44,6 @@ void chkLong(unsigned long long add, int *chksum);
 void printTapeArchive(struct tapeArchive *tape);
 int ifBlankBlock(tapeArchive *tape);
 int ifStringBlank(char *check, int size);
-int sizeTranslation(char *intString);
+unsigned long sizeTranslation(char *intString);
 
 #endif
