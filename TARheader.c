@@ -110,7 +110,7 @@ void fillTapeArchive(int fd, char* path)
     }
 
     /*File Permissions*/
-    for(i = sizeof(tape->mode) - 2; i >= 4; i--){
+    for(i = sizeof(tape->mode) - 2; i >= 3; i--){
 	tape->mode[i] = (mhold & 0x7) + 48;
 	checkFind += (mhold & 0x7) + 48;
 	mhold >>= 3;
