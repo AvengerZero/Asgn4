@@ -87,12 +87,9 @@ int listing(){ //NOTE: CORRUPT HEADER=ABORT
             if (yes){ //do the traversal
                 //print info
                 if (v==1){printv(tar);}
-                else{ printf("%s/n",tar->name);
+                else{ printf("%s/n",tar->name);}
             }
-            else { //skip  
-                read(fd,NULL,b); //skip the contents x-steps
-
-            }
+            read(fd,NULL,b); //skip the contents x-steps
         }
         else {//if no path,print everything
         //checks to see if 
@@ -132,8 +129,8 @@ int tarVerify(TapeArchive *tar){
 }
 void printv(TapeArchive *tar){ //rule of thumb: copy data into your own for ease of manipulation
     //uses mode (left padded with 4 ASCII 0000, 4 ASCII numbers, 0(sticky)XXX (user-group.other)) and \0
-    char octal[4]=tar->mode-4;
-    char perms[10]=0;
+    char octal[4]=tar->uid-4;
+    char perms[11]=0;
     switch (*tar->typeflag){
         case '5':
             perms[0]='d';
@@ -160,25 +157,31 @@ void printv(TapeArchive *tar){ //rule of thumb: copy data into your own for ease
         }
         else {persm[i*3+1]='-';}
     }
-    
+    printf("%s ",persm);
     //translate uid and gid into namespace (if failed, print numbers)
     struct passwd *pwd;
     //int uid=tar->uid ? strtol into int?
     if ((pwd = getpwuid(uid)) != NULL)
-        printf(" %-8.8s", pwd->pw_name);
+        printf("%*s ",17, pwd->pw_name);
     else
-        printf(" %-8d", uid);
+        printf("%*d ", uid); 
     struct group *grp;
     //int gid=tar->gid ??
     if ((grp = getgrgid(gid)) != NULL)
-        printf(" %-8.8s", grp->gr_name);
+        printf("%*s ", grp->gr_name);
     else
-        printf(" %-8d", gid);
+        printf("%*d ", gid);
     
     //translate time int into time format
-    
-    //in printing, adds spaces (formatting)
-    printf("",);
+    time_t time=strtol(tar->mtime,NULL,8);
+    char tim[16];
+    printf("%s "formatdate(tim,time));
+    printf("%s/n",tar->name); //consider if it's not NULL-terminated? (sectioned at 100?)
+}
+char* formatdate(char* str, time_t val)
+{
+        strftime(str, 16, "%Y-%m-%d %H:%M", localtime(&val));
+        return str;
 }
 //timing of errors for header: listing, extracting, after getting header
         //todo: permission, verify (deals with strict),pseudo for extracting 
