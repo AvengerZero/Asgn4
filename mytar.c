@@ -96,6 +96,19 @@ int main(int argc, char *argv[]){
     }
     return 0;
 }
+
+void makeDirPath(char *path)
+{
+    char *slash = strrchr(path, '/' );
+    if(slash != NULL) {
+	*slash = 0;
+	makeDirPath(path);
+	*slash = '/';
+    }
+    mkdir(path,0777);
+}
+
+
 void extraction(char *tarfile, char *dest){
     int fd = open(tarfile, O_RDONLY), checksize = 0,
 	twoBlanks = 0, rounds = 0;
@@ -105,7 +118,10 @@ void extraction(char *tarfile, char *dest){
     char saveDirectory[500];
     if(dest != NULL){
 	getcwd(saveDirectory, sizeof(char) * 500);
-	/////////////////////////////if chdir fails
+	if(chdir(dest)){
+	    makeDirPath(dest);
+	    chdir(dest);
+	}
     }
     while(twoBlanks != 2){
 	tape = createArchiveFromFile(fd);
@@ -119,9 +135,16 @@ void extraction(char *tarfile, char *dest){
 	    }
 	    strcat(pathname, tape->name);
 	    int writeFD;
+	    int total  = 0, i= 0;
+	    printf("%s\n", pathname);
 	    switch(tape->typeflag){
 	    case '5':
-		mkdir(pathname, sizeTranslation(tape->mode));
+		for(; i < strlen(tape->mode); i++){
+		    total *= 8;
+		    total += tape->mode[i] - 48;
+		}
+		makeDirPath(pathname);
+		chmod(pathname, total);
 		break;
 	    case '2':
 		symlink(pathname, tape->linkname);
@@ -131,13 +154,20 @@ void extraction(char *tarfile, char *dest){
 			       | O_CREAT, 644);
 		for(; rounds > 0; rounds--){
 		    int writeBlanc = read(fd, buffer, sizeof(char) * 512);
-		    int i = 0;
+		    i = 0;
 		    write(writeFD, buffer, sizeof(char) * writeBlanc);
 		    for(i = 512 - writeBlanc; i > 0; i--){
 			write(writeFD, " ", sizeof(char));
 		    }
 		}
+		for(i = 0; i < strlen(tape->mode); i++){
+		    total *= 8;
+		    total += tape->mode[i] - 48;
+		}
+		makeDirPath(pathname);
+		chmod(pathname, total);
 	    }
+	    fillArrayBlank(pathname, 255);
 	    /*struct utimebuf *newTime = utimebuf *
 	      malloc(sizeof(struct utimebuf));
 	      newTime->modtime = sizeTranslation(tape->mtime);
@@ -285,7 +315,11 @@ void printv(struct tapeArchive *tar, int S, int checksize){
 
     printf(" ");
 
-    sizeback(checksize, 8);
+    if(checksize == 0){
+	printf("       0");
+    }else{
+	sizeback(checksize, 8);
+    }
 
     printf(" ");
 

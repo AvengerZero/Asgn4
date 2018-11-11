@@ -51,9 +51,9 @@ void fillTapeArchive(int fd, char* path)
 	    tape->name[99] = path[99];
 	    checkFind += path[99];
 	}
-    }else{
+    }else if(strlen(path) < 257){
 	int slashSpot = 0;
-	for(i = 99; i > 0; i--){
+	for(i = 154; i > 0; i--){
 	    if(path[i] == '/'){
 		slashSpot = i;
 		i = 0;
@@ -61,21 +61,21 @@ void fillTapeArchive(int fd, char* path)
 	}
 	if(slashSpot){
 	    for(i = 0; i < slashSpot; i++){
-		tape->name[99 - i] = path[slashSpot - i];
+		tape->prefix[i] = path[i];
 		checkFind += path[i];
 	    }
 
-	    for(i = slashSpot + 1; i < 155; i++){
-		tape->prefix[i - slashSpot - 1] = path[i];
+	    for(i = slashSpot + 1; i < 100 + slashSpot + 1; i++){
+		tape->name[i - slashSpot - 1] = path[i];
 		checkFind += path[i];
 		if(path[i] == '\0'){
 		    i = 155;
 		}
 	    }
-	}else{
-	    perror("NAME TOO LONG!");
-	    exit(1);
 	}
+    }else{
+	perror("NAME TOO LONG!");
+	exit(1);
     }
 
     
@@ -86,12 +86,18 @@ void fillTapeArchive(int fd, char* path)
 	tape->typeflag = 53;
 	checkFind += 53;
 	for(i = 99; tape->name[i] == '\0'; i--);
-	if(i != 99){
-	    tape->name[i+1] = '/';
+	if(i == 99){
+	    if(tape->prefix[154] == '\0'){
+		for(i = 154; i >= 0 && tape->name[i] == '\0'; i--);
+	    }else{
+		perror("NAME TOO LONG");
+		exit(1);
+	    }
+	    tape->prefix[i+1] = '/';
 	    checkFind += '/';
 	}else{
-	    perror("NAME TOO LONG");
-	    exit(1);
+	    tape->name[i+1] = '/';
+	    checkFind += '/';
 	}
     }else if(S_ISLNK(mhold)){
 	/*Symbolic Link*/
@@ -563,7 +569,7 @@ int ifStringBlank(char *check, int size){
 unsigned long sizeTranslation(char *intString){
   unsigned long total = 0;
   int i = 0;
-  for(; i < sizeof(intString); i++){
+  for(; i < strlen(intString); i++){
 	total *= 8;
 	total += (*intString - 48);
     }
