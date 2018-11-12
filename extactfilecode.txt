@@ -1,9 +1,0 @@
-extract file code
-
-for(i = 0; i < 512; i++){
-			read(fd, &buffed, sizeof(char));
-			i = 0;
-			if(buffed != NULL){
-			    write(writeFD, buffer, sizeof(char) * writeBlanc);
-			}
-		    }
