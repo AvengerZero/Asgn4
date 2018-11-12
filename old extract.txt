@@ -1,0 +1,67 @@
+
+void extraction(char *tarfile, char *dest){
+    int fd = open(tarfile, O_RDONLY), checksize = 0,
+	twoBlanks = 0, rounds = 0;
+    struct tapeArchive *tape;
+    char pathname[255];
+    char buffer[512];
+    char saveDirectory[500];
+    if(dest != NULL){
+	getcwd(saveDirectory, sizeof(char) * 500);
+	if(chdir(dest)){
+	    makeDirPath(dest);
+	    chdir(dest);
+	}
+	/////////////////////////////if chdir fails
+    }
+    while(twoBlanks != 2){
+	tape = createArchiveFromFile(fd);
+	if(ifBlankBlock(tape)){
+	    twoBlanks = 0;
+	    checksize = sizeTranslation(tape->size);
+	    rounds = 1 + (checksize / 512);
+	    if(tape->prefix[0]){
+		strcat(pathname, tape->prefix);
+		    strcat(pathname, "/");
+	    }
+	    strcat(pathname, tape->name);
+	    int writeFD;
+	    printf("%s\n", pathname);
+	    switch(tape->typeflag){
+	    case '5':
+		makeDirPath(pathname);
+		/*int j, mask = 0;
+		for(j = 0; j < 7; j++){
+		    mask *= 8;
+		    mask += tape->mode[j] - 48;
+		}*/
+		//chmod(pathname, mask);
+		break;
+	    case '2':
+		symlink(pathname, tape->linkname);
+		break;
+	    default:
+		writeFD = open(pathname, O_WRONLY | O_TRUNC
+			       | O_CREAT, 644);
+		for(; rounds > 0; rounds--){
+		    int writeBlanc = read(fd, buffer, sizeof(char) * 512);
+		    int i = 0;
+		    write(writeFD, buffer, sizeof(char) * writeBlanc);
+		    for(i = 512 - writeBlanc; i > 0; i--){
+			write(writeFD, " ", sizeof(char));
+		    }
+		}
+	    }
+	    fillArrayBlank(pathname, 255);
+	    /*struct utimebuf *newTime = utimebuf *
+	      malloc(sizeof(struct utimebuf));
+	      newTime->modtime = sizeTranslation(tape->mtime);
+	      utime(pathname, newTime);*/
+	}else{
+	    twoBlanks++;
+	}
+    }
+    close(fd);
+    if(dest != NULL){
+	chdir(saveDirectory);
+    }
